@@ -1,0 +1,56 @@
+name: platform-sdk-php publish
+description: Run tests, then mirror-push the package to a sibling repo and tag it for Packagist
+
+inputs:
+  version:
+    description: Version to publish (without leading v, e.g. 0.1.0)
+    required: true
+  mirror-repo:
+    description: GitHub repo to mirror push to (owner/name, e.g. uengage-io/php-platform-sdk)
+    required: true
+  mirror-token:
+    description: PAT or fine-grained token with contents:write on the mirror repo
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: shivammathur/setup-php@v2
+      with:
+        php-version: '7.4'
+        coverage: none
+    - name: Install composer deps
+      working-directory: packages/platform-sdk-php
+      shell: bash
+      run: composer install --prefer-dist --no-progress --no-interaction
+    - name: Run phpunit
+      working-directory: packages/platform-sdk-php
+      shell: bash
+      run: vendor/bin/phpunit
+    - name: Mirror push to sibling repo and tag
+      shell: bash
+      env:
+        SRC_DIR: packages/platform-sdk-php
+        VERSION: ${{ inputs.version }}
+        MIRROR_REPO: ${{ inputs.mirror-repo }}
+        MIRROR_TOKEN: ${{ inputs.mirror-token }}
+      run: |
+        set -euo pipefail
+        WORK_DIR="$(mktemp -d)"
+        trap 'rm -rf "$WORK_DIR"' EXIT
+
+        cp -R "$SRC_DIR/." "$WORK_DIR/"
+        cd "$WORK_DIR"
+        rm -rf vendor composer.lock .git
+
+        git init -q -b main
+        git config user.name "uengage-platform-bot"
+        git config user.email "platform@uengage.io"
+        git add -A
+        git commit -qm "release ${VERSION} (from ${GITHUB_REPOSITORY}@${GITHUB_SHA})"
+        git tag -a "v${VERSION}" -m "v${VERSION}"
+
+        REMOTE_URL="https://x-access-token:${MIRROR_TOKEN}@github.com/${MIRROR_REPO}.git"
+        git remote add origin "$REMOTE_URL"
+        git push --force origin main
+        git push origin "v${VERSION}"
