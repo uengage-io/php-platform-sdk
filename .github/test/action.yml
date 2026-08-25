@@ -1,0 +1,39 @@
+name: platform-sdk-php test
+description: Install composer deps and run phpunit on the PHP platform SDK
+
+inputs:
+  php-version:
+    description: PHP version to test against
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ inputs.php-version }}
+        coverage: none
+    - name: Install composer deps
+      working-directory: packages/platform-sdk-php
+      shell: bash
+      run: composer install --prefer-dist --no-progress --no-interaction
+    - name: Run phpunit
+      working-directory: packages/platform-sdk-php
+      shell: bash
+      run: vendor/bin/phpunit
+    # The publish action compares Config::SDK_VERSION against the release
+    # tag, but that only runs on a tag push. CI cannot know the future tag,
+    # so it checks the half it can: that the constant is a well-formed
+    # semver. A typo therefore fails on the PR rather than on a tag push
+    # that also triggers a real publish.
+    - name: Check Config::SDK_VERSION is well-formed
+      working-directory: packages/platform-sdk-php
+      shell: bash
+      run: |
+        php -r 'require "src/Config.php";
+          $v = Uengage\PlatformSdk\Config::SDK_VERSION;
+          if (!preg_match("/^\d+\.\d+\.\d+$/", $v)) {
+            fwrite(STDERR, "Config::SDK_VERSION is not a bare semver: $v\n");
+            exit(1);
+          }
+          echo "SDK_VERSION $v is well-formed\n";'
