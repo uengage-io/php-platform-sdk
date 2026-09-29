@@ -1,0 +1,23 @@
+name: platform-sdk-php test
+description: Install composer deps and run phpunit on the PHP platform SDK
+
+inputs:
+  php-version:
+    description: PHP version to test against
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ inputs.php-version }}
+        coverage: none
+    - name: Install composer deps
+      working-directory: packages/platform-sdk-php
+      shell: bash
+      run: composer install --prefer-dist --no-progress --no-interaction
+    - name: Run phpunit
+      working-directory: packages/platform-sdk-php
+      shell: bash
+      run: vendor/bin/phpunit
